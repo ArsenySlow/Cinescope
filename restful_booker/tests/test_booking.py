@@ -1,4 +1,4 @@
-from constants import BASE_URL
+from restful_booker.tests.constants import BASE_URL
 
 
 class TestBookings:
