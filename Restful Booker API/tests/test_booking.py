@@ -1,4 +1,3 @@
-import pytest
 from constants import BASE_URL
 
 
