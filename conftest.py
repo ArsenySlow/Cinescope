@@ -1,10 +1,43 @@
-import requests
-from constants import BASE_URL, HEADERS, REGISTER_ENDPOINT, LOGIN_ENDPOINT
+from faker import Faker
 import pytest
+import requests
+
+from api.api_manager import ApiManager
+from constants import BASE_URL, REGISTER_ENDPOINT
+from custom_requester.custom_requester import CustomRequester
 from utils.data_generator import DataGenerator
+
+faker = Faker()
 
 
 @pytest.fixture(scope="session")
+def session():
+    """
+    Фикстура для создания общей HTTP-сессии.
+    """
+    http_session = requests.Session()
+    yield http_session
+    http_session.close()
+
+
+@pytest.fixture(scope="session")
+def api_manager(session):
+    """
+    Фикстура для создания экземпляра ApiManager с общей сессией.
+    """
+    return ApiManager(session)
+
+
+@pytest.fixture(scope="session")
+def requester(session):
+    """
+    Фикстура для создания экземпляра CustomRequester с той же сессией.
+    """
+    # 👇 Ключевое изменение: используем ту же сессию, что и api_manager
+    return CustomRequester(session=session, base_url=BASE_URL)
+
+
+@pytest.fixture(scope="function")
 def test_user():
     """
     Генерация случайного пользователя для тестов.
@@ -21,28 +54,21 @@ def test_user():
         "roles": ["USER"]
     }
 
+@pytest.fixture(scope="function")
+def registered_user(requester, test_user):
+    """
+    Регистрируем пользователя через тот же requester (в одной сессии),
+    и возвращаем его данные.
+    """
+    # ensure_user_not_exists(requester, test_user["email"])
 
-@pytest.fixture(scope="session")
-def auth_session(test_user):
-    # Регистрируем нового пользователя
-    register_url = f"{BASE_URL}{REGISTER_ENDPOINT}"
-    response = requests.post(register_url, json=test_user, headers=HEADERS)
-    assert response.status_code == 201, "Ошибка регистрации пользователя"
-
-    # Логинимся для получения токена
-    login_url = f"{BASE_URL}{LOGIN_ENDPOINT}"
-    login_data = {
-        "email": test_user["email"],
-        "password": test_user["password"]
-    }
-    response = requests.post(login_url, json=login_data, headers=HEADERS)
-    assert response.status_code == 200, "Ошибка авторизации"
-
-    # Получаем токен и создаём сессию
-    token = response.json().get("accessToken")
-    assert token is not None, "Токен доступа отсутствует в ответе"
-
-    session = requests.Session()
-    session.headers.update(HEADERS)
-    session.headers.update({"Authorization": f"Bearer {token}"})
-    return session
+    response = requester.send_request(
+        method="POST",
+        endpoint=REGISTER_ENDPOINT,
+        data=test_user,
+        expected_status=201
+    )
+    response_data = response.json()
+    registered_user = test_user.copy()
+    registered_user["id"] = response_data["id"]
+    return registered_user
