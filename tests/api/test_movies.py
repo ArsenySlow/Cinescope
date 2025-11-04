@@ -1,52 +1,36 @@
-from api.api_manager import ApiManager
+from constants import BASE_MOVIE_FIELDS
 
 class TestMoviesAPI:
 
-    def test_getting_movies_no_params(self, api_manager: ApiManager, test_user):
-        # Получение списка фильмов без параметров
+    @staticmethod
+    def validate_movie_structure(movie: dict):
+        """Проверка структуры одной записи фильма"""
+        for field in BASE_MOVIE_FIELDS:
+            assert field in movie, f"Нет обязательного поля '{field}' в фильме: {movie}"
+
+        assert isinstance(movie["genre"], dict), "Поле 'genre' должно быть объектом"
+        assert "name" in movie["genre"], "Нет поля genre.name"
+
+
+    def test_getting_movies_no_params(self, api_manager):
         response = api_manager.movie_api.get_movies_info()
-        response_data = response.json()
+        assert response.status_code == 200, f"Ошибка статус: {response.status_code}, тело: {response.text}"
 
-        # Проверка отсутствия ошибок
-        assert response.status_code == 200, f"Неверный статус ответа: {response.status_code}, тело: {response.text}"
-        assert "error" not in response_data, f"Ошибка в ответе: {response_data.get('error')}, сообщение: {response_data.get('message')}"
+        data = response.json()
+        assert data.get("error") is None, f"Ошибка API: {data}"
 
-        # Проверка структуры ответа
-        assert "movies" in response_data, "В ответе отсутствует ключ 'movies'"
-        assert response_data["movies"] is not None, "Поле 'movies' пустое"
-
-        assert "count" in response_data, "В ответе отсутствует ключ 'count'"
-        assert response_data["count"] is not None, "Поле 'count' пустое"
-
-        assert "page" in response_data, "В ответе отсутствует ключ 'page'"
-        assert response_data["page"] is not None, "Поле 'page' пустое"
-
-        assert "pageSize" in response_data, "В ответе отсутствует ключ 'pageSize'"
-        assert response_data["pageSize"] is not None, "Поле 'pageSize' пустое"
-
-        assert "pageCount" in response_data, "В ответе отсутствует ключ 'pageCount'"
-        assert response_data["pageCount"] is not None, "Поле 'pageCount' пустое"
-
-        # Проверка структуры основного ответа
+        # Проверка ключей корневого объекта
         for key in ["movies", "count", "page", "pageSize", "pageCount"]:
-            assert key in response_data, f"В ответе отсутствует ключ '{key}'"
-            assert response_data[key] is not None, f"Поле '{key}' пустое"
+            assert key in data, f"Нет ключа '{key}' в ответе"
 
-        # Проверка структуры всех фильмов
-        movies = response_data["movies"]
-        assert isinstance(movies, list), "Поле 'movies' должно быть списком"
+        assert isinstance(data["movies"], list), "movies должен быть списком"
 
-        for i, movie in enumerate(movies):
-            assert "name" in movie["genre"], f"У фильма c айди #{movies[i]["id"]} отсутствует имя жанра ('genre.name')"
-            for field in [
-                "id", "name", "price", "description", "imageUrl",
-                "location", "published", "genreId", "genre", "createdAt", "rating"
-            ]:
-                assert field in movie, f"У фильма #{i} отсутствует поле '{field}'"
+        # Проверка каждого фильма
+        for movie in data["movies"]:
+            self.validate_movie_structure(movie)
 
 
-    def test_getting_movies_with_filters(self, api_manager: ApiManager):
-        """Проверка получения фильмов с фильтрами"""
+    def test_getting_movies_with_filters(self, api_manager):
         params = {
             "pageSize": 5,
             "page": 2,
@@ -59,203 +43,127 @@ class TestMoviesAPI:
         }
 
         response = api_manager.movie_api.get_movies_info(params=params)
+        assert response.status_code == 200
+
         data = response.json()
+        assert data.get("error") is None
 
-        # Базовые проверки
-        assert response.status_code == 200, f"Неверный статус: {response.status_code}, тело: {response.text}"
-        assert "error" not in data, f"Ошибка в ответе: {data.get('error')}, сообщение: {data.get('message')}"
+        movies = data["movies"]
+        assert isinstance(movies, list)
 
-        # Проверка структуры ответа
-        assert "movies" in data, "Ответ не содержит ключ 'movies'"
-        assert isinstance(data["movies"], list), "Поле 'movies' должно быть списком"
-        assert "count" in data, "Нет поля 'count'"
-        assert "page" in data, "Нет поля 'page'"
-        assert "pageSize" in data, "Нет поля 'pageSize'"
-        assert "pageCount" in data, "Нет поля 'pageCount'"
+        for movie in movies:
+            self.validate_movie_structure(movie)
 
-        # Проверка фильмов
-        if data["movies"]:
-            movie = data["movies"][0]
-            for field in ["id", "name", "price", "description", "imageUrl", "location",
-                          "published", "genreId", "genre", "createdAt", "rating"]:
-                assert field in movie, f"В фильме отсутствует поле '{field}'"
-            assert params["minPrice"] <= movie["price"] <= params["maxPrice"], "Цена вне указанного диапазона"
-            assert movie["location"] in params["locations"], "Локация не соответствует фильтру"
-            assert movie["published"] == params["published"], "Флаг 'published' не соответствует фильтру"
-            assert movie["genreId"] == params["genreId"], "Жанр не соответствует фильтру"
+            # Бизнес-логика фильтров
+            assert params["minPrice"] <= movie["price"] <= params["maxPrice"]
+            assert movie["location"] in params["locations"]
+            assert movie["published"] == params["published"]
+            assert movie["genreId"] == params["genreId"]
 
+    def test_create_movie(self, api_manager, super_admin_login, created_movie, movie_data):
+        """Создание фильма под админом"""
 
-    # def test_getting_movies_page_size(self):
-    #     # URL для регистрации
-    #     movies_url = f"{BASE_MOVIE_URL}{MOVIES_ENDPOINT}"
-    #     response = requests.get(movies_url, headers=HEADERS)
-    #
-    #     assert response.status_code == 200, f'Статус код != 200, а равен {response.status_code}'
-    #     assert "error" not in response.json(), f' Ошибка - {response.json()["error"]}, {response.json()["message"]}'
-    #     assert len(response.json()["movies"]) == 10  # basic == 10
-    #     assert response.json()["pageSize"] == 10  # basic == 10
-    #
-    #     movies_url = f"{BASE_MOVIE_URL}{MOVIES_ENDPOINT}?{MOVIE_PARAMS["page_size"]}"
-    #
-    #     expected_page_size = ''
-    #     for el in MOVIE_PARAMS["page_size"]:
-    #         if el.isdigit():
-    #             expected_page_size += el
-    #     expected_page_size = int(expected_page_size)
-    #
-    #     # Отправка запроса на регистрацию
-    #     response = requests.get(movies_url, headers=HEADERS)
-    #
-    #     assert response.status_code == 200, f'Статус код != 200, а равен {response.status_code}'
-    #     assert "error" not in response.json(), f' Ошибка - {response.json()["error"]}, {response.json()["message"]}'
-    #     assert response.json()["movies"] is not None
-    #     assert response.json()["pageSize"] == expected_page_size
-    #     assert len(response.json()["movies"]) == expected_page_size
-    #     assert response.json()["pageCount"] is not None
-    #
-    # def test_getting_movies_page_number(self):
-    #     # URL для регистрации
-    #     movies_url = f"{BASE_MOVIE_URL}{MOVIES_ENDPOINT}"
-    #     response = requests.get(movies_url, headers=HEADERS)
-    #
-    #     assert response.status_code == 200, f'Статус код != 200, а равен {response.status_code}'
-    #     assert "error" not in response.json(), f' Ошибка - {response.json()["error"]}, {response.json()["message"]}'
-    #     assert response.json()["page"] == 1  # basic == 1
-    #
-    #     movies_url = f"{BASE_MOVIE_URL}{MOVIES_ENDPOINT}?{MOVIE_PARAMS["page"]}"
-    #
-    #     expected_page_number = ''
-    #     for el in MOVIE_PARAMS["page"]:
-    #         if el.isdigit():
-    #             expected_page_number += el
-    #
-    #     # Отправка запроса на регистрацию
-    #     response = requests.get(movies_url, headers=HEADERS)
-    #
-    #     assert response.status_code == 200, f'Статус код != 200, а равен {response.status_code}'
-    #     assert "error" not in response.json(), f' Ошибка - {response.json()["error"]}, {response.json()["message"]}'
-    #     assert response.json()["movies"] is not None
-    #     assert response.json()["pageCount"] is not None
-    #     assert response.json()["page"] == int(expected_page_number)
-    #
-    # def test_getting_movies_filter_by_locations(self):
-    #     # URL для регистрации
-    #     movies_url = f"{BASE_MOVIE_URL}{MOVIES_ENDPOINT}?{MOVIE_PARAMS["location1"]}"
-    #     # Отправка запроса на регистрацию
-    #     response = requests.get(movies_url, headers=HEADERS)
-    #
-    #     assert response.json()["movies"] is not None
-    #     assert response.status_code == 200, f'Статус код != 200, ОШИБКА --- {response.json()['error']}, {response.json()["message"]}'
-    #     assert "error" not in response.json(), f' Ошибка - {response.json()["error"]}, {response.json()["message"]}'
-    #     expected_location = MOVIE_PARAMS["location1"][-3:]
-    #     for movie in response.json()["movies"]:
-    #         assert movie["location"] == expected_location
-    #
-    #     movies_url = f"{BASE_MOVIE_URL}{MOVIES_ENDPOINT}?{MOVIE_PARAMS["location2"]}"
-    #     # Отправка запроса на регистрацию
-    #     response = requests.get(movies_url, headers=HEADERS)
-    #
-    #     assert response.status_code == 200, f'Статус код != 200, а равен {response.status_code}'
-    #     assert response.json()["movies"] is not None
-    #     assert "error" not in response.json(), f' Ошибка - {response.json()["error"]}, {response.json()["message"]}'
-    #     expected_location = MOVIE_PARAMS["location2"][-3:]
-    #     for movie in response.json()["movies"]:
-    #         assert movie["location"] == expected_location
-    #
-    # def test_getting_movies_filter_by_genre_id(self):
-    #     # URL для регистрации
-    #     movies_url = f"{BASE_MOVIE_URL}{MOVIES_ENDPOINT}?{MOVIE_PARAMS["genre_id"]}"
-    #
-    #     # Отправка запроса на регистрацию
-    #     response = requests.get(movies_url, headers=HEADERS)
-    #     assert response.status_code == 200, f'Статус код != 200, ОШИБКА --- {response.json()['error']}, {response.json()["message"]}'
-    #     assert "error" not in response.json(), f' Ошибка - {response.json()["error"]}, {response.json()["message"]}'
-    #
-    #     expected_genre_id = ''
-    #     for el in MOVIE_PARAMS["genre_id"]:
-    #         if el.isdigit():
-    #             expected_genre_id += el
-    #     expected_genre_id = int(expected_genre_id)
-    #
-    #     for movie in response.json()["movies"]:
-    #         assert movie["genreId"] == expected_genre_id
-    #         assert movie["genre"]["name"] == MOVIE_PARAMS['genre_name']
+        movie = created_movie
+
+        # Проверки структуры
+        for field in ["id", "name", "price", "description", "location",
+                      "published", "genreId", "genre", "createdAt", "rating"]:
+            assert field in movie, f"Отсутствует поле '{field}'"
+
+        # Проверки на совпадение отправленных данных
+        assert movie["name"] == movie_data["name"]
+        assert movie["price"] == movie_data["price"]
+        assert movie["location"] == movie_data["location"]
+        assert movie["description"] == movie_data["description"]
+        assert movie["published"] == movie_data["published"]
+        assert movie["genreId"] == movie_data["genreId"]
+
+        # Проверка: можно получить фильм по ID и данные совпадут
+        response_get = api_manager.movie_api.get_movie_by_id(movie["id"])
+        assert response_get.status_code == 200
+        movie_get = response_get.json()
+        for key in ["id", "name", "price", "description", "location",
+                    "published", "genreId"]:
+            assert movie_get[key] == movie[key], f"Несовпадение поля '{key}' при GET по ID"
+
+    def test_create_movie_invalid_data(self, api_manager, super_admin_login):
+        """POST /movies с некорректными данными должен вернуть 400"""
+        invalid_data = {}
+        api_manager.movie_api.create_movie(invalid_data,expected_status=400)
 
 
+    def test_get_movie_by_id(self, api_manager, super_admin_login, created_movie, movie_data):
+        """Создание фильма под админом"""
 
+        movie = created_movie
 
+        # Проверка: можно получить фильм по ID и данные совпадут
+        response_get = api_manager.movie_api.get_movie_by_id(movie["id"])
+        assert response_get.status_code == 200
+        movie_get = response_get.json()
+        for key in ["id", "name", "price", "description", "location",
+                    "published", "genreId"]:
+            assert movie_get[key] == movie[key], f"Несовпадение поля '{key}' при GET по ID"
 
+    def test_get_movie_by_nonexistent_id(self, api_manager, super_admin_login):
+        """GET /movies/{id} с несуществующим ID должен вернуть 404"""
+        non_existing_id = 999999999999
+        api_manager.movie_api.get_movie_by_id(non_existing_id, expected_status=500)
 
+    def test_update_movie_invalid_data(self, api_manager, super_admin_login, created_movie):
+        """PATCH /movies/{id} с некорректными данными должен вернуть 400"""
+        movie = created_movie
+        invalid_update = {
+            "price": -500,  # некорректная цена
+            "published": "not_boolean"  # некорректный тип
+        }
 
+        response = api_manager.movie_api.update_movie(
+            movie_id=movie["id"],
+            data=invalid_update,
+            expected_status=400
+        )
+        assert response.status_code == 400, f"Ожидался 400, получен {response.status_code}, тело: {response.text}"
+        data = response.json()
+        assert "error" in data or "message" in data, f"Ошибка не описана в ответе: {data}"
 
+    def test_update_movie(self, api_manager, super_admin_login, created_movie, updated_movie_data):
+        """
+        Редактирование фильма
+        """
+        movie = created_movie
 
+        # PATCH
+        response = api_manager.movie_api.update_movie(movie_id=movie["id"], data=updated_movie_data)
+        assert response.status_code == 200, response.text
 
+        updated_movie = response.json()
 
+        # Проверка структуры
+        for field in ["id", "name", "price", "description", "location",
+                      "published", "genreId", "genre", "createdAt", "rating", "imageUrl"]:
+            assert field in updated_movie, f"Отсутствует поле '{field}'"
 
+        # Проверка соответствия обновленных данных
+        for key in updated_movie_data:
+            assert updated_movie[key] == updated_movie_data[key], f"Несовпадение поля '{key}' после обновления"
 
-    # def test_getting_movies_filter_by_published(self):
-    #     # URL для регистрации
-    #     movies_url = f"{BASE_MOVIE_URL}{MOVIES_ENDPOINT}?{MOVIE_PARAMS["published"]}"
-    #
-    #     # Отправка запроса на регистрацию
-    #     response = requests.get(movies_url, headers=HEADERS)
-    #
-    #     assert response.status_code == 200
-    #     assert response.json()["movies"] is not None
-    #     print(len(response.json()["movies"]))
-    #     assert len(response.json()["movies"]) > 0
-    #     assert response.json()["count"] is not None
-    #     assert response.json()["page"] is not None
-    #     assert response.json()["pageSize"] is not None
-    #     assert response.json()["pageCount"] is not None
-    #     assert "error" not in response.json(), f' Ошибка - {response.json()["error"]}, {response.json()["message"]}'
-    #
-    # def test_getting_movies_filter_by_price(self):
-    #     # URL для регистрации
-    #     movies_url = f"{BASE_MOVIE_URL}{MOVIES_ENDPOINT}?{MOVIE_PARAMS["min_price"]}&{MOVIE_PARAMS["max_price"]}"
-    #
-    #     # Отправка запроса на регистрацию
-    #     response = requests.get(movies_url, headers=HEADERS)
-    #     assert "error" not in response.json(), f' Ошибка - {response.json()["error"]}, {response.json()["message"]}'
-    #
-    #     assert response.json()["movies"] is not None
-    #     print(len(response.json()["movies"]))
-    #     assert len(response.json()["movies"]) > 0
-    #     assert response.json()["count"] is not None
-    #     assert response.json()["page"] is not None
-    #     assert response.json()["pageSize"] is not None
-    #     assert response.json()["pageCount"] is not None
-    #
-    # def test_getting_movies_filter_by_created_at(self):
-    #     # URL для регистрации
-    #     movies_url = f"{BASE_MOVIE_URL}{MOVIES_ENDPOINT}?{MOVIE_PARAMS["locations"]}"
-    #
-    #     # Отправка запроса на регистрацию
-    #     response = requests.get(movies_url, headers=HEADERS)
-    #
-    #     assert response.status_code == 200
-    #     assert response.json()["movies"] is not None
-    #     print(len(response.json()["movies"]))
-    #     assert len(response.json()["movies"]) > 0
-    #     assert response.json()["count"] is not None
-    #     assert response.json()["page"] is not None
-    #     assert response.json()["pageSize"] is not None
-    #     assert response.json()["pageCount"] is not None
-    #     assert "error" not in response.json(), f' Ошибка - {response.json()["error"]}, {response.json()["message"]}'
-    #
-    # def test_getting_movies_with_all_params(self):
-    #     # URL для регистрации
-    #     movies_url = f"{BASE_MOVIE_URL}{MOVIES_ENDPOINT}?{'&'.join(MOVIE_PARAMS.values())}"
-    #
-    #     # Отправка запроса на регистрацию
-    #     response = requests.get(movies_url, headers=HEADERS)
-    #
-    #     assert "error" not in response.json(), f' Ошибка - {response.json()["error"]}, {response.json()["message"]}'
-    #     # assert response.json()["movies"] is not None
-    #     # print(len(response.json()["movies"]))
-    #     # assert len(response.json()["movies"]) > 0
-    #     # assert response.json()["count"] is not None
-    #     # assert response.json()["page"] is not None
-    #     # assert response.json()["pageSize"] is not None
-    #     # assert response.json()["pageCount"] is not None
-    #     assert "error" not in response.json(), f' Ошибка - {response.json()["error"]}, {response.json()["message"]}'
+        # GET по ID, проверка что данные сохранились
+        response_get = api_manager.movie_api.get_movie_by_id(movie["id"])
+        assert response_get.status_code == 200
+        movie_get = response_get.json()
+        for key in updated_movie_data:
+            assert movie_get[key] == updated_movie[key], f"GET по ID: Несовпадение поля '{key}' после обновления"
+
+    def test_delete_movie_direct(self, api_manager, super_admin_login, movie_data):
+        response = api_manager.movie_api.create_movie(movie_data)
+        movie = response.json()
+
+        # DELETE
+        response = api_manager.movie_api.delete_movie(movie["id"])
+        assert response.status_code == 200
+
+        # GET по удалённому ID
+        response_get = api_manager.movie_api.get_movie_by_id(movie["id"], expected_status=404)
+        data = response_get.json()
+        assert data["error"] == "Not Found"

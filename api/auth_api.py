@@ -1,5 +1,5 @@
 from custom_requester.custom_requester import CustomRequester
-from constants import LOGIN_ENDPOINT, REGISTER_ENDPOINT
+from constants import LOGIN_ENDPOINT, REGISTER_ENDPOINT, SUPERADMIN_CREDS
 
 
 class AuthAPI(CustomRequester):
@@ -49,3 +49,10 @@ class AuthAPI(CustomRequester):
 
         token = response["accessToken"]
         self._update_session_headers(self.session, Authorization=f"Bearer {token}")
+
+
+    def login_as_superadmin(self):
+        """
+        Авторизация под админом
+        """
+        return self.authenticate(SUPERADMIN_CREDS)
