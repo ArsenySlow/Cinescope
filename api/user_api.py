@@ -1,5 +1,5 @@
 from custom_requester.custom_requester import CustomRequester
-from constants import BASE_URL, HEADERS, REGISTER_ENDPOINT, LOGIN_ENDPOINT
+from constants import BASE_URL
 
 class UserAPI(CustomRequester):
     """
