@@ -1,13 +1,43 @@
 from faker import Faker
 import pytest
 import requests
-from constants import BASE_URL, REGISTER_ENDPOINT, LOGIN_ENDPOINT
+
+from api.api_manager import ApiManager
+from constants import BASE_URL, REGISTER_ENDPOINT
 from custom_requester.custom_requester import CustomRequester
 from utils.data_generator import DataGenerator
 
 faker = Faker()
 
+
 @pytest.fixture(scope="session")
+def session():
+    """
+    Фикстура для создания общей HTTP-сессии.
+    """
+    http_session = requests.Session()
+    yield http_session
+    http_session.close()
+
+
+@pytest.fixture(scope="session")
+def api_manager(session):
+    """
+    Фикстура для создания экземпляра ApiManager с общей сессией.
+    """
+    return ApiManager(session)
+
+
+@pytest.fixture(scope="session")
+def requester(session):
+    """
+    Фикстура для создания экземпляра CustomRequester с той же сессией.
+    """
+    # 👇 Ключевое изменение: используем ту же сессию, что и api_manager
+    return CustomRequester(session=session, base_url=BASE_URL)
+
+
+@pytest.fixture(scope="function")
 def test_user():
     """
     Генерация случайного пользователя для тестов.
@@ -24,11 +54,14 @@ def test_user():
         "roles": ["USER"]
     }
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def registered_user(requester, test_user):
     """
-    Фикстура для регистрации и получения данных зарегистрированного пользователя.
+    Регистрируем пользователя через тот же requester (в одной сессии),
+    и возвращаем его данные.
     """
+    # ensure_user_not_exists(requester, test_user["email"])
+
     response = requester.send_request(
         method="POST",
         endpoint=REGISTER_ENDPOINT,
@@ -39,12 +72,3 @@ def registered_user(requester, test_user):
     registered_user = test_user.copy()
     registered_user["id"] = response_data["id"]
     return registered_user
-
-@pytest.fixture(scope="session")
-def requester():
-    """
-    Фикстура для создания экземпляра CustomRequester.
-    """
-    session = requests.Session()
-    return CustomRequester(session=session, base_url=BASE_URL)
-
