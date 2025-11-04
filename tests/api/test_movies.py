@@ -11,7 +11,6 @@ class TestMoviesAPI:
         assert isinstance(movie["genre"], dict), "Поле 'genre' должно быть объектом"
         assert "name" in movie["genre"], "Нет поля genre.name"
 
-
     def test_getting_movies_no_params(self, api_manager):
         response = api_manager.movie_api.get_movies_info()
         assert response.status_code == 200, f"Ошибка статус: {response.status_code}, тело: {response.text}"
@@ -28,7 +27,6 @@ class TestMoviesAPI:
         # Проверка каждого фильма
         for movie in data["movies"]:
             self.validate_movie_structure(movie)
-
 
     def test_getting_movies_with_filters(self, api_manager):
         params = {
@@ -90,7 +88,6 @@ class TestMoviesAPI:
         """POST /movies с некорректными данными должен вернуть 400"""
         invalid_data = {}
         api_manager.movie_api.create_movie(invalid_data,expected_status=400)
-
 
     def test_get_movie_by_id(self, api_manager, super_admin_login, created_movie, movie_data):
         """Создание фильма под админом"""
@@ -155,7 +152,7 @@ class TestMoviesAPI:
         for key in updated_movie_data:
             assert movie_get[key] == updated_movie[key], f"GET по ID: Несовпадение поля '{key}' после обновления"
 
-    def test_delete_movie_direct(self, api_manager, super_admin_login, movie_data):
+    def test_delete_movie(self, api_manager, super_admin_login, movie_data):
         response = api_manager.movie_api.create_movie(movie_data)
         movie = response.json()
 
