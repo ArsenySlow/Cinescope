@@ -24,8 +24,9 @@ class CustomRequester:
         self.headers = self.base_headers.copy()
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logging.INFO)
+        self.session = session
 
-    def send_request(self, method, endpoint, data=None, expected_status=200, need_logging=True):
+    def send_request(self, method, endpoint, data=None, expected_status=200, need_logging=True, headers=None):
         """
         Универсальный метод для отправки запросов.
         :param method: HTTP метод (GET, POST, PUT, DELETE и т.д.).
@@ -33,10 +34,16 @@ class CustomRequester:
         :param data: Тело запроса (JSON-данные).
         :param expected_status: Ожидаемый статус-код (по умолчанию 200).
         :param need_logging: Флаг для логирования (по умолчанию True).
+        :param headers: Дополнительные заголовки для запроса (по умолчанию None, тогда используются self.headers).
         :return: Объект ответа requests.Response.
         """
+        if headers:
+            # если передали кастомные headers, используем их
+            self.session.headers.update(headers)
+
         url = f"{self.base_url}{endpoint}"
-        response = requests.request(method, url, json=data, headers=self.headers)
+        response = self.session.request(method, url, json=data, headers=headers)
+
         if need_logging:
             self.log_request_and_response(response)
         if response.status_code != expected_status:

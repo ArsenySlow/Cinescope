@@ -55,13 +55,12 @@ def test_user():
     }
 
 @pytest.fixture(scope="function")
-def registered_user(requester, test_user):
+def registered_user(requester, test_user, api_manager):
     """
     Регистрируем пользователя через тот же requester (в одной сессии),
     и возвращаем его данные.
     """
     # ensure_user_not_exists(requester, test_user["email"])
-
     response = requester.send_request(
         method="POST",
         endpoint=REGISTER_ENDPOINT,
@@ -71,4 +70,11 @@ def registered_user(requester, test_user):
     response_data = response.json()
     registered_user = test_user.copy()
     registered_user["id"] = response_data["id"]
-    return registered_user
+
+    # Логинимся и получаем токен
+    api_manager.auth_api.authenticate((test_user["email"], test_user["password"]))
+
+    yield registered_user
+
+    # Удаляем пользователя под его токеном
+    api_manager.user_api.clean_up_user(registered_user["id"])
