@@ -1,11 +1,15 @@
 from urllib.parse import urlencode
 from custom_requester.custom_requester import CustomRequester
-from constants import BASE_MOVIE_URL
+from constants.constants import BASE_MOVIE_URL
 
 class MovieAPI(CustomRequester):
     """
     Класс для работы с API пользователей.
     """
+
+    def __init__(self, session):
+        super().__init__(session = session, base_url=BASE_MOVIE_URL)
+        self.session = session
 
     @staticmethod
     def build_query_string(params: dict) -> str:
@@ -28,10 +32,6 @@ class MovieAPI(CustomRequester):
 
         query_string = "?" + urlencode(filtered)
         return query_string
-
-    def __init__(self, session):
-        super().__init__(session = session, base_url=BASE_MOVIE_URL)
-        self.session = session
 
     def get_movies_info(self, expected_status: int = 200, headers: dict = None, params: dict = None ):
         """

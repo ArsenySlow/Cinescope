@@ -5,8 +5,6 @@ LOGIN_ENDPOINT = "/login"
 REGISTER_ENDPOINT = "/register"
 MOVIES_ENDPOINT = "/movies"
 
-SUPERADMIN_CREDS= ("api1@gmail.com", "asdqwe123Q")
-
 HEADERS = {
     "Content-Type": "application/json",
     "Accept": "application/json"
@@ -16,3 +14,18 @@ BASE_MOVIE_FIELDS = [
     "id", "name", "price", "description", "imageUrl", "location",
     "published", "genreId", "genre", "createdAt", "rating"
 ]
+
+PARAMS = {
+    "pageSize": 5,
+    "page": 2,
+    "minPrice": 100,
+    "maxPrice": 500,
+    "locations": ["MSK", "SPB"],
+    "published": True,
+    "genreId": 1,
+    "createdAt": "desc",
+}
+
+GREEN = '\033[32m'
+RED = '\033[31m'
+RESET = '\033[0m'
